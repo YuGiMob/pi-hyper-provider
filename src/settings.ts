@@ -17,6 +17,21 @@ const HyperStatusItemsValidator = Compile(HyperStatusItemsSchema);
 
 export type HyperStatusItems = Required<Static<typeof HyperStatusItemsSchema>>;
 
+const HyperTransportSchema = Type.Union([
+	Type.Literal("openai-completions"),
+	Type.Literal("openai-responses"),
+	Type.Literal("anthropic-messages"),
+]);
+const HyperTransportValidator = Compile(HyperTransportSchema);
+
+export type HyperTransportSetting = Static<typeof HyperTransportSchema>;
+
+export const HYPER_TRANSPORTS: readonly HyperTransportSetting[] = [
+	"openai-completions",
+	"openai-responses",
+	"anthropic-messages",
+];
+export const DEFAULT_HYPER_TRANSPORT: HyperTransportSetting = "openai-completions";
 const DEFAULT_STATUS_ITEMS: HyperStatusItems = {
 	teamName: false,
 	hypercredits: true,
@@ -49,6 +64,39 @@ export function writeHyperStatusItems(statusItems: HyperStatusItems): void {
 
 	mkdirSync(hyperProviderDir(), { recursive: true });
 	writeFileSync(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+}
+
+export function readHyperTransport(warn?: WarningSink): HyperTransportSetting {
+	const settings = readSettingsObject();
+	return (
+		parseHyperTransport(property(settings, "transport"), "transport in hyper-provider/settings.json", warn) ??
+		DEFAULT_HYPER_TRANSPORT
+	);
+}
+
+export function writeHyperTransport(transport: HyperTransportSetting): void {
+	const settings = readSettingsObject();
+	settings.transport = transport;
+
+	mkdirSync(hyperProviderDir(), { recursive: true });
+	writeFileSync(settingsPath(), `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+}
+
+export function defaultHyperTransport(): HyperTransportSetting {
+	return DEFAULT_HYPER_TRANSPORT;
+}
+
+export function normalizeHyperTransportSetting(value: string): HyperTransportSetting | undefined {
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "openai-completions" || normalized === "completions") return "openai-completions";
+	if (normalized === "openai-responses" || normalized === "responses") return "openai-responses";
+	if (normalized === "anthropic-messages" || normalized === "anthropic" || normalized === "messages")
+		return "anthropic-messages";
+	return undefined;
+}
+
+export function hyperTransportSummary(transport: HyperTransportSetting): string {
+	return `transport=${transport}`;
 }
 
 export function migrateHyperSettings(warn?: WarningSink): void {
@@ -123,6 +171,20 @@ function parseHyperStatusItems(value: unknown, source: string, warn?: WarningSin
 		...DEFAULT_STATUS_ITEMS,
 		...value,
 	};
+}
+
+function parseHyperTransport(value: unknown, source: string, warn?: WarningSink): HyperTransportSetting | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value === "string") {
+		const normalized = normalizeHyperTransportSetting(value);
+		if (normalized !== undefined) return normalized;
+	}
+	if (!HyperTransportValidator.Check(value)) {
+		warn?.(`Ignoring invalid ${source}`);
+		return undefined;
+	}
+
+	return value;
 }
 
 function property(source: Record<string, unknown>, key: string): unknown {

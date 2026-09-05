@@ -9,6 +9,7 @@ const packageName = packageJson.name.split("/").at(-1) ?? "pi-hyper-provider";
 
 export const PROVIDER_NAME = "hyper";
 export const PROVIDER_DISPLAY_NAME = "Charm Hyper";
+export type HyperApi = "openai-completions" | "openai-responses" | "anthropic-messages";
 export const HYPER_BASE_URL = "https://hyper.charm.land";
 export const HYPER_API_BASE_URL = `${HYPER_BASE_URL}/v1`;
 export const HYPER_API_KEY = "$HYPER_API_KEY";

@@ -49,6 +49,21 @@ on/off or reset to the defaults. `teamName` defaults to `false` and
 /hyper-status reset
 ```
 
+Use `/hyper-transport` to choose which Hyper API transport Pi uses:
+
+```sh
+/hyper-transport
+/hyper-transport openai-completions
+/hyper-transport openai-responses
+/hyper-transport anthropic-messages
+/hyper-transport reset
+```
+
+The default is `openai-completions` (`POST /v1/chat/completions`).
+`openai-responses` uses `POST /v1/responses` and `anthropic-messages` uses
+`POST /v1/messages`. After switching, re-select your model with `/model` and
+open the TUI once so Pi refreshes its model cache.
+
 ## Contributing
 
 See the [contributing guide](https://github.com/charmbracelet/pi-hyper-provider?tab=contributing-ov-file#contributing).

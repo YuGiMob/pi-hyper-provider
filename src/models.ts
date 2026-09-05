@@ -2,7 +2,7 @@ import type { Model, ThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import { fetchJson } from "./http.js";
-import { HYPER_API_BASE_URL, HYPER_USER_AGENT, hyperJsonHeaders, PROVIDER_NAME } from "./hyper.js";
+import { HYPER_API_BASE_URL, HYPER_BASE_URL, HYPER_USER_AGENT, type HyperApi, hyperJsonHeaders } from "./hyper.js";
 import { parseSchema } from "./schema.js";
 
 const MODEL_FETCH_TIMEOUT_MS = 3_000;
@@ -57,7 +57,7 @@ const ProviderPayloadValidator = Compile(ProviderPayloadSchema);
 
 type ProviderModel = Static<typeof ProviderModelSchema>;
 
-function toProviderModel(model: ProviderModel): Model<"openai-completions"> {
+function toProviderModel(model: ProviderModel, api: HyperApi, provider: string): Model<HyperApi> {
 	const input: ("text" | "image")[] = model.supports_attachments ? ["text", "image"] : ["text"];
 	const reasoningLevels = model.reasoning_levels ?? [];
 	const supportsReasoningEffort = reasoningLevels.length > 0;
@@ -70,9 +70,9 @@ function toProviderModel(model: ProviderModel): Model<"openai-completions"> {
 	return {
 		id: model.id,
 		name: model.name,
-		api: "openai-completions",
-		provider: PROVIDER_NAME,
-		baseUrl: HYPER_API_BASE_URL,
+		api,
+		provider,
+		baseUrl: api === "anthropic-messages" ? HYPER_BASE_URL : HYPER_API_BASE_URL,
 		headers: { "User-Agent": HYPER_USER_AGENT },
 		reasoning: model.can_reason,
 		thinkingLevelMap,
@@ -85,13 +85,23 @@ function toProviderModel(model: ProviderModel): Model<"openai-completions"> {
 		},
 		contextWindow: model.context_window,
 		maxTokens: model.default_max_tokens,
-		compat: {
+		compat: compatForApi(api, supportsReasoningEffort),
+	};
+}
+
+function compatForApi(api: HyperApi, supportsReasoningEffort: boolean): Model<HyperApi>["compat"] {
+	if (api === "openai-completions") {
+		return {
 			supportsStore: false,
 			supportsReasoningEffort,
 			thinkingFormat: "deepseek",
 			maxTokensField: "max_tokens",
-		},
-	};
+		};
+	}
+	if (api === "openai-responses") {
+		return { supportsStore: false };
+	}
+	return undefined;
 }
 
 function buildThinkingLevelMap(levels: string[]): ThinkingLevelMap | undefined {
@@ -110,15 +120,19 @@ function buildThinkingLevelMap(levels: string[]): ThinkingLevelMap | undefined {
 export async function fetchHyperModels({
 	signal,
 	token,
+	api,
+	provider,
 }: {
 	signal: AbortSignal;
 	token: string | undefined;
-}): Promise<Model<"openai-completions">[]> {
+	api: HyperApi;
+	provider: string;
+}): Promise<Model<HyperApi>[]> {
 	const payload = await fetchJson(`${HYPER_API_BASE_URL}/provider`, {
 		headers: token ? hyperJsonHeaders({ Authorization: `Bearer ${token}` }) : undefined,
 		signal,
 		timeoutMs: MODEL_FETCH_TIMEOUT_MS,
 	});
-	const provider = parseSchema(ProviderPayloadValidator, payload, "Hyper /provider response");
-	return provider.models.map(toProviderModel);
+	const catalog = parseSchema(ProviderPayloadValidator, payload, "Hyper /provider response");
+	return catalog.models.map((model) => toProviderModel(model, api, provider));
 }
